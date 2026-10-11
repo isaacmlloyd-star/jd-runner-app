@@ -83,7 +83,6 @@ export default function JDRunnerApp() {
     setActualsForm({ date: '', actual: '', unitsActual: '', crepActual: '', twoForActual: '' });
   };
 
-  // --- MANAGEMENT HANDLERS ---
   const handleAddAgent = (e) => {
     e.preventDefault();
     if (!newAgent.name) return;
@@ -113,23 +112,16 @@ export default function JDRunnerApp() {
 
   const generateCoachingSuggestion = (agent) => {
     if (agent.target === 0) return "Awaiting shift data to generate coaching strategy.";
-    
     const toRatio = agent.target > 0 ? agent.actual / agent.target : 0;
     const unitsRatio = agent.unitsTarget > 0 ? agent.unitsActual / agent.unitsTarget : 0;
     const crepRatio = agent.crepTarget > 0 ? agent.crepActual / agent.crepTarget : 0;
     const twoForRatio = agent.twoForTarget > 0 ? agent.twoForActual / agent.twoForTarget : 0;
 
-    if (toRatio < 0.4 && unitsRatio > 0.6) {
-      return "Assist the agent to strategize a way to increase their basket size. They are moving units but falling short on high-ticket turnover.";
-    } else if (crepRatio < 0.3 && agent.crepTarget > 0) {
-      return "Assist the agent to strategize a way to increase their Crep attach rate during the shoe-fitting stage.";
-    } else if (twoForRatio < 0.3 && agent.twoForTarget > 0) {
-      return "Assist the agent to strategize a way to push the 2-for-650 apparel promos at the fitting room to increase volume.";
-    } else if (toRatio < 0.5) {
-      return "Assist the agent to strategize a way to intercept unassisted traffic earlier to build bigger baskets.";
-    } else {
-      return "Agent is performing well. Maintain floor momentum and assist with closing high-value walk-ins.";
-    }
+    if (toRatio < 0.4 && unitsRatio > 0.6) return "Assist the agent to strategize a way to increase their basket size. They are moving units but falling short on high-ticket turnover.";
+    if (crepRatio < 0.3 && agent.crepTarget > 0) return "Assist the agent to strategize a way to increase their Crep attach rate during the shoe-fitting stage.";
+    if (twoForRatio < 0.3 && agent.twoForTarget > 0) return "Assist the agent to strategize a way to push the 2-for-650 apparel promos at the fitting room to increase volume.";
+    if (toRatio < 0.5) return "Assist the agent to strategize a way to intercept unassisted traffic earlier to build bigger baskets.";
+    return "Agent is performing well. Maintain floor momentum and assist with closing high-value walk-ins.";
   };
 
   // ================= LANDING SCREEN =================
@@ -210,7 +202,6 @@ export default function JDRunnerApp() {
                         </div>
                       </div>
                       
-                      {/* LIVE ACTUALS GRID */}
                       <div className="grid grid-cols-2 gap-3 mb-4">
                         <div>
                           <label className="text-[10px] font-bold text-yellow-500 uppercase">Live T/O Actual (R)</label>
@@ -243,7 +234,6 @@ export default function JDRunnerApp() {
                           <span className="ml-auto text-xs font-bold text-zinc-400">{Math.round((agent.actual / agent.target) * 100) || 0}% to Target</span>
                         </div>
                         
-                        {/* AUTOMATED COACHING ENGINE */}
                         <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800 mb-4">
                           <p className="text-[11px] font-bold text-zinc-400 uppercase flex items-center gap-1 mb-2"><Lightbulb className="w-3 h-3 text-yellow-500" /> Automated Strategy</p>
                           <p className="text-sm text-zinc-300 italic">"{generateCoachingSuggestion(agent)}"</p>
@@ -274,15 +264,30 @@ export default function JDRunnerApp() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-200 font-sans">
       <header className="bg-black border-b border-zinc-800 sticky top-0 z-50 no-print">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="bg-yellow-400 text-black font-black text-xl px-2 py-0.5 italic tracking-tighter skew-x-[-10deg]">JD</div>
-            <div className="flex flex-col">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3 w-full justify-between md:w-auto md:justify-start">
+            <div className="flex items-center gap-3">
+              <div className="bg-yellow-400 text-black font-black text-xl px-2 py-0.5 italic tracking-tighter skew-x-[-10deg]">JD</div>
               <h1 className="text-sm font-bold uppercase tracking-widest text-zinc-100">Runner<span className="text-yellow-500">OS</span></h1>
-              <span className="text-[10px] text-zinc-500 font-mono uppercase">{department} / {subDivision}</span>
             </div>
+            <button onClick={() => setCurrentScreen('landing')} className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 px-2 py-1 rounded bg-zinc-900 md:hidden">Exit</button>
           </div>
-          <button onClick={() => setCurrentScreen('landing')} className="text-xs font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 px-3 py-1 rounded bg-zinc-900">Exit</button>
+          
+          <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto overflow-x-auto scrollbar-hide pb-1 md:pb-0">
+            <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800 shrink-0">
+              {departments.map(d => (
+                <button key={d} onClick={() => { setDepartment(d); setSubDivision(d === 'POS' ? 'None' : 'Footwear'); }} className={`px-3 py-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-md transition-all ${department === d ? 'bg-yellow-400 text-black' : 'text-zinc-400 hover:text-white'}`}>{d}</button>
+              ))}
+            </div>
+            {department !== 'POS' && (
+              <div className="flex bg-zinc-900 rounded-lg p-1 border border-zinc-800 shrink-0">
+                {subDivisions.map(sd => (
+                  <button key={sd} onClick={() => setSubDivision(sd)} className={`px-3 py-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-wider rounded-md transition-all ${subDivision === sd ? 'bg-zinc-700 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>{sd}</button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setCurrentScreen('landing')} className="hidden md:block text-[10px] font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 px-3 py-1.5 rounded bg-zinc-900 shrink-0 ml-2">Exit</button>
+          </div>
         </div>
       </header>
 
