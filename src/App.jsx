@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Activity, CheckCircle2, Share2, Download, LogIn, Target, TrendingUp, Users, Briefcase, ChevronDown, ChevronUp, MessageSquare, Lightbulb, FolderOpen, Save } from 'lucide-react';
+import { Activity, CheckCircle2, Share2, Download, LogIn, Target, TrendingUp, Users, Briefcase, ChevronDown, ChevronUp, MessageSquare, Lightbulb, FolderOpen, Save, Trash2, Folder, ArrowLeft } from 'lucide-react';
 
 function useStickyState(defaultValue, key) {
   const [value, setValue] = useState(() => {
@@ -34,12 +34,14 @@ export default function JDRunnerApp() {
   const [actualsForm, setActualsForm] = useState({ date: '', actual: '', unitsActual: '', crepActual: '', twoForActual: '' });
 
   // --- MANAGEMENT DATA ---
-  const [mgmtTab, setMgmtTab] = useState('live'); // 'live' | 'archive'
+  const [mgmtTab, setMgmtTab] = useState('live');
   const [mgmtDept, setMgmtDept] = useState('Men');
   const [archiveMonth, setArchiveMonth] = useState('');
+  const [archiveAgent, setArchiveAgent] = useState(null);
+  const [archiveWeek, setArchiveWeek] = useState(null);
   
   const [mgmtStaff, setMgmtStaff] = useStickyState({ Men: [], Women: [], Juniors: [], Children: [], POS: [] }, 'jd_mgmt_staff');
-  const [mgmtArchive, setMgmtArchive] = useStickyState({}, 'jd_mgmt_archive'); // { "Oct 2026": { "Men": [ {date, name, actual...} ] } }
+  const [mgmtArchive, setMgmtArchive] = useStickyState({}, 'jd_mgmt_archive_v2'); 
   
   const [newAgent, setNewAgent] = useState({ name: '', target: '', unitsTarget: '', crepTarget: '', twoForTarget: '' });
   const [expandedAgentId, setExpandedAgentId] = useState(null);
@@ -47,11 +49,16 @@ export default function JDRunnerApp() {
   const departments = ['Men', 'Women', 'Juniors', 'Children', 'POS'];
   const subDivisions = ['Footwear', 'Apparel'];
 
-  // Set default archive month
   useEffect(() => {
     const months = Object.keys(mgmtArchive);
     if (months.length > 0 && !archiveMonth) setArchiveMonth(months[months.length - 1]);
   }, [mgmtArchive, archiveMonth]);
+
+  // Reset folder navigation when changing department or month
+  useEffect(() => {
+    setArchiveAgent(null);
+    setArchiveWeek(null);
+  }, [mgmtDept, archiveMonth, mgmtTab]);
 
   // --- AGENT INSIGHTS ENGINE ---
   const insights = useMemo(() => {
@@ -61,10 +68,8 @@ export default function JDRunnerApp() {
 
     if (latest.crepActual === 0 && latest.crepTarget > 0) weaknesses.push("Missed Crep targets completely today.");
     else if (latest.crepActual >= 5) strengths.push("Strong Crep attach rate today!");
-
     if (latest.unitsActual >= latest.unitsTarget * 0.8) strengths.push("Excellent unit closing rate. You are aggressively converting traffic.");
     else weaknesses.push("Low unit conversion. Unassisted traffic is walking out.");
-
     if ((latest.actual / latest.target) < 0.3 && latest.unitsActual > 10) {
       weaknesses.push("ATV Gap: High units but low turnover.");
       strategies.push("STRATEGY: You are selling too many low-ticket items. Leverage floor teamwork to pass customers and cross-sell high-ticket footwear to bridge the turnover gap.");
@@ -102,11 +107,27 @@ export default function JDRunnerApp() {
       id: Date.now(), name: newAgent.name, target: parseFloat(newAgent.target) || 0, actual: 0,
       unitsTarget: parseInt(newAgent.unitsTarget) || 0, unitsActual: 0, 
       crepTarget: parseInt(newAgent.crepTarget) || 0, crepActual: 0, 
-      twoForTarget: parseInt(newAgent.twoForTarget) || 0, twoForActual: 0, 
-      feedback: ''
+      twoForTarget: parseInt(newAgent.twoForTarget) || 0, twoForActual: 0, feedback: ''
     };
     setMgmtStaff({ ...mgmtStaff, [mgmtDept]: [...mgmtStaff[mgmtDept], agent] });
     setNewAgent({ name: '', target: '', unitsTarget: '', crepTarget: '', twoForTarget: '' });
+  };
+
+  const handleDeleteAgent = (agentId, agentName) => {
+    if (window.confirm(`SECURITY WARNING: Are you sure you want to delete ${agentName}? This will permanently erase their current targets AND wipe all historical data from the archives.`)) {
+      // Remove from Live Floor
+      const updatedLive = mgmtStaff[mgmtDept].filter(a => a.id !== agentId);
+      setMgmtStaff({ ...mgmtStaff, [mgmtDept]: updatedLive });
+
+      // Deep purge from Archives
+      const newArchive = { ...mgmtArchive };
+      Object.keys(newArchive).forEach(month => {
+        if (newArchive[month] && newArchive[month][mgmtDept]) {
+          newArchive[month][mgmtDept] = newArchive[month][mgmtDept].filter(r => r.name !== agentName);
+        }
+      });
+      setMgmtArchive(newArchive);
+    }
   };
 
   const updateAgent = (agentId, field, value) => {
@@ -118,29 +139,25 @@ export default function JDRunnerApp() {
     const today = new Date();
     const monthKey = today.toLocaleString('default', { month: 'long', year: 'numeric' });
     const dateStr = today.toLocaleDateString();
+    const weekNum = `Week ${Math.ceil(today.getDate() / 7)}`;
 
     const newArchive = { ...mgmtArchive };
     if (!newArchive[monthKey]) newArchive[monthKey] = { Men: [], Women: [], Juniors: [], Children: [], POS: [] };
 
-    // Clone current staff into archive, then reset active actuals
     const updatedStaff = { ...mgmtStaff };
-    
     departments.forEach(dept => {
       mgmtStaff[dept].forEach(agent => {
         if (agent.actual > 0 || agent.unitsActual > 0) {
-          newArchive[monthKey][dept].push({ ...agent, dateLogged: dateStr });
+          newArchive[monthKey][dept].push({ ...agent, dateLogged: dateStr, weekLogged: weekNum });
         }
       });
-      // Zero out live actuals
-      updatedStaff[dept] = mgmtStaff[dept].map(agent => ({
-        ...agent, actual: 0, unitsActual: 0, crepActual: 0, twoForActual: 0
-      }));
+      updatedStaff[dept] = mgmtStaff[dept].map(agent => ({ ...agent, actual: 0, unitsActual: 0, crepActual: 0, twoForActual: 0 }));
     });
 
     setMgmtArchive(newArchive);
     setMgmtStaff(updatedStaff);
     setArchiveMonth(monthKey);
-    alert(`Floor data archived to ${monthKey} folder. Live actuals have been reset to 0 for a new shift.`);
+    alert(`Floor data archived to ${monthKey} > ${weekNum} folder. Live actuals have been reset to 0.`);
   };
 
   const getPerformanceStatus = (agent) => {
@@ -209,17 +226,14 @@ export default function JDRunnerApp() {
           {/* LIVE FLOOR TAB */}
           {mgmtTab === 'live' && (
             <div className="space-y-6">
-              
               <div className="flex overflow-x-auto scrollbar-hide border-b border-zinc-800 pb-2">
                 {departments.map(d => (
-                  <button key={d} onClick={() => setMgmtDept(d)} className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all rounded-lg ${mgmtDept === d ? 'bg-blue-900/30 text-blue-400' : 'text-zinc-500'}`}>
-                    {d}
-                  </button>
+                  <button key={d} onClick={() => setMgmtDept(d)} className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all rounded-lg ${mgmtDept === d ? 'bg-blue-900/30 text-blue-400' : 'text-zinc-500'}`}>{d}</button>
                 ))}
               </div>
 
               <button onClick={handleArchiveAndReset} className="w-full bg-emerald-950 border border-emerald-900 hover:bg-emerald-900 text-emerald-400 font-black uppercase tracking-widest py-4 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-                <Save className="w-5 h-5" /> End Day & Reset Floor
+                <Save className="w-5 h-5" /> End Day & Archive Floor
               </button>
 
               <form onSubmit={handleAddAgent} className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-lg">
@@ -242,38 +256,33 @@ export default function JDRunnerApp() {
                     const status = getPerformanceStatus(agent);
                     const isExpanded = expandedAgentId === agent.id;
                     return (
-                      <div key={agent.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-lg">
+                      <div key={agent.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-lg relative">
+                        
                         <div className="p-4 border-b border-zinc-800">
-                          <div className="flex justify-between items-center mb-3">
+                          <div className="flex justify-between items-start mb-3">
                             <h3 className="font-black text-lg text-white uppercase tracking-wider">{agent.name}</h3>
-                            <div className="text-right">
-                              <span className="block text-[10px] text-zinc-500 uppercase tracking-widest">T/O Target</span>
-                              <span className="font-bold text-zinc-300">R{agent.target}</span>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <span className="block text-[10px] text-zinc-500 uppercase tracking-widest">T/O Target</span>
+                                <span className="font-bold text-zinc-300">R{agent.target}</span>
+                              </div>
+                              <button onClick={() => handleDeleteAgent(agent.id, agent.name)} className="p-2 text-zinc-600 hover:text-red-500 hover:bg-red-950/30 rounded-lg transition-colors" title="Delete Agent">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
                           
                           <div className="grid grid-cols-2 gap-3 mb-4">
-                            <div>
-                              <label className="text-[10px] font-bold text-yellow-500 uppercase">Live T/O Actual (R)</label>
-                              <input type="number" value={agent.actual || ''} onChange={e => updateAgent(agent.id, 'actual', parseFloat(e.target.value) || 0)} className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-2 text-yellow-400 font-bold focus:outline-none" placeholder={`Target: R${agent.target}`} />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-bold text-blue-400 uppercase">Live Units Actual</label>
-                              <input type="number" value={agent.unitsActual || ''} onChange={e => updateAgent(agent.id, 'unitsActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-blue-900/50 rounded-lg p-2 text-blue-400 focus:outline-none" placeholder={`Target: ${agent.unitsTarget}`} />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-bold text-emerald-400 uppercase">Live Crep Actual</label>
-                              <input type="number" value={agent.crepActual || ''} onChange={e => updateAgent(agent.id, 'crepActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-emerald-900/50 rounded-lg p-2 text-emerald-400 focus:outline-none" placeholder={`Target: ${agent.crepTarget}`} />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-bold text-purple-400 uppercase">Live 2-For-650 Actual</label>
-                              <input type="number" value={agent.twoForActual || ''} onChange={e => updateAgent(agent.id, 'twoForActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-purple-900/50 rounded-lg p-2 text-purple-400 focus:outline-none" placeholder={`Target: ${agent.twoForTarget}`} />
-                            </div>
+                            <div><label className="text-[10px] font-bold text-yellow-500 uppercase">Live T/O Actual (R)</label><input type="number" value={agent.actual || ''} onChange={e => updateAgent(agent.id, 'actual', parseFloat(e.target.value) || 0)} className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-2 text-yellow-400 font-bold focus:outline-none" placeholder={`Target: R${agent.target}`} /></div>
+                            <div><label className="text-[10px] font-bold text-blue-400 uppercase">Live Units Actual</label><input type="number" value={agent.unitsActual || ''} onChange={e => updateAgent(agent.id, 'unitsActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-blue-900/50 rounded-lg p-2 text-blue-400 focus:outline-none" placeholder={`Target: ${agent.unitsTarget}`} /></div>
+                            <div><label className="text-[10px] font-bold text-emerald-400 uppercase">Live Crep Actual</label><input type="number" value={agent.crepActual || ''} onChange={e => updateAgent(agent.id, 'crepActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-emerald-900/50 rounded-lg p-2 text-emerald-400 focus:outline-none" placeholder={`Target: ${agent.crepTarget}`} /></div>
+                            <div><label className="text-[10px] font-bold text-purple-400 uppercase">Live 2-For-650</label><input type="number" value={agent.twoForActual || ''} onChange={e => updateAgent(agent.id, 'twoForActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-purple-900/50 rounded-lg p-2 text-purple-400 focus:outline-none" placeholder={`Target: ${agent.twoForTarget}`} /></div>
                           </div>
                           <button onClick={() => setExpandedAgentId(isExpanded ? null : agent.id)} className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold uppercase tracking-widest py-3 rounded-lg text-[10px] flex items-center justify-center gap-2 transition-colors">
                             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />} Display Performance Level
                           </button>
                         </div>
+
                         {isExpanded && (
                           <div className={`p-4 border-t border-zinc-800 ${status.bg}`}>
                             <div className="flex items-center gap-2 mb-4">
@@ -299,7 +308,7 @@ export default function JDRunnerApp() {
             </div>
           )}
 
-          {/* ARCHIVE TAB */}
+          {/* ARCHIVE TAB (Folder Navigation) */}
           {mgmtTab === 'archive' && (
             <div className="space-y-6">
               {Object.keys(mgmtArchive).length === 0 ? (
@@ -310,42 +319,87 @@ export default function JDRunnerApp() {
                 </div>
               ) : (
                 <>
-                  <div className="flex overflow-x-auto scrollbar-hide gap-2 pb-2">
-                    {Object.keys(mgmtArchive).map(month => (
-                      <button key={month} onClick={() => setArchiveMonth(month)} className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all rounded-lg border ${archiveMonth === month ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-950 border-zinc-900 text-zinc-500'}`}>
-                        {month}
-                      </button>
-                    ))}
+                  {/* Top Level Filters */}
+                  <div className="flex flex-col sm:flex-row gap-4 mb-4 border-b border-zinc-800 pb-4">
+                    <div className="flex overflow-x-auto scrollbar-hide gap-2">
+                      {Object.keys(mgmtArchive).map(month => (
+                        <button key={month} onClick={() => setArchiveMonth(month)} className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all rounded-lg border ${archiveMonth === month ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-950 border-zinc-900 text-zinc-500'}`}>{month}</button>
+                      ))}
+                    </div>
+                    <div className="flex overflow-x-auto scrollbar-hide gap-2">
+                      {departments.map(d => (
+                        <button key={d} onClick={() => setMgmtDept(d)} className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all rounded-lg ${mgmtDept === d ? 'bg-blue-900/30 text-blue-400' : 'text-zinc-500'}`}>{d}</button>
+                      ))}
+                    </div>
                   </div>
 
                   {archiveMonth && mgmtArchive[archiveMonth] && (
                     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-                      <div className="flex overflow-x-auto scrollbar-hide border-b border-zinc-800 mb-4 pb-2">
-                        {departments.map(d => (
-                          <button key={d} onClick={() => setMgmtDept(d)} className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all rounded-lg ${mgmtDept === d ? 'bg-blue-900/30 text-blue-400' : 'text-zinc-500'}`}>{d}</button>
-                        ))}
-                      </div>
+                      
+                      {/* Breadcrumb Navigation */}
+                      {(archiveAgent || archiveWeek) && (
+                        <div className="flex items-center gap-2 mb-6 border-b border-zinc-800 pb-4">
+                          <button onClick={() => { setArchiveAgent(null); setArchiveWeek(null); }} className="text-zinc-400 hover:text-white flex items-center gap-1 text-xs font-bold uppercase"><ArrowLeft className="w-4 h-4"/> Back to Agents</button>
+                          {archiveAgent && <span className="text-zinc-600">/</span>}
+                          {archiveAgent && archiveWeek && <button onClick={() => setArchiveWeek(null)} className="text-zinc-400 hover:text-white flex items-center gap-1 text-xs font-bold uppercase"><ArrowLeft className="w-4 h-4"/> Back to Weeks</button>}
+                        </div>
+                      )}
 
-                      <div className="space-y-3">
-                        {mgmtArchive[archiveMonth][mgmtDept]?.length === 0 ? (
-                          <p className="text-zinc-600 text-xs italic">No historical records for {mgmtDept} in {archiveMonth}.</p>
-                        ) : (
-                          mgmtArchive[archiveMonth][mgmtDept]?.map((record, i) => (
-                            <div key={i} className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                              <div>
-                                <h4 className="font-bold text-white uppercase">{record.name}</h4>
-                                <span className="text-[10px] text-zinc-500 font-mono">{record.dateLogged}</span>
-                              </div>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                <div><span className="block text-[10px] text-zinc-500 uppercase">Turnover</span><span className="font-bold text-yellow-500">R{record.actual}</span><span className="text-zinc-600 text-[10px] block">/ R{record.target}</span></div>
-                                <div><span className="block text-[10px] text-zinc-500 uppercase">Units</span><span className="font-bold text-blue-400">{record.unitsActual}</span><span className="text-zinc-600 text-[10px] block">/ {record.unitsTarget}</span></div>
-                                <div><span className="block text-[10px] text-zinc-500 uppercase">Crep</span><span className="font-bold text-emerald-400">{record.crepActual}</span><span className="text-zinc-600 text-[10px] block">/ {record.crepTarget}</span></div>
-                                <div><span className="block text-[10px] text-zinc-500 uppercase">2-For-650</span><span className="font-bold text-purple-400">{record.twoForActual}</span><span className="text-zinc-600 text-[10px] block">/ {record.twoForTarget}</span></div>
-                              </div>
+                      {/* Folder Logic */}
+                      {(() => {
+                        const records = mgmtArchive[archiveMonth]?.[mgmtDept] || [];
+                        
+                        // Level 1: Agent Folders
+                        if (!archiveAgent) {
+                          const agents = [...new Set(records.map(r => r.name))];
+                          if (agents.length === 0) return <p className="text-zinc-600 text-xs italic py-4">No agents archived in {mgmtDept} for {archiveMonth}.</p>;
+                          return (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              {agents.map(name => (
+                                <button key={name} onClick={() => setArchiveAgent(name)} className="bg-zinc-950 border border-zinc-800 hover:border-blue-500 p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-colors">
+                                  <Folder className="w-10 h-10 text-blue-400" />
+                                  <span className="font-bold text-white uppercase tracking-wider text-sm">{name}</span>
+                                </button>
+                              ))}
                             </div>
-                          ))
-                        )}
-                      </div>
+                          );
+                        }
+                        
+                        // Level 2: Week Folders
+                        if (archiveAgent && !archiveWeek) {
+                          const agentRecords = records.filter(r => r.name === archiveAgent);
+                          const weeks = [...new Set(agentRecords.map(r => r.weekLogged))].sort();
+                          return (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              {weeks.map(week => (
+                                <button key={week} onClick={() => setArchiveWeek(week)} className="bg-zinc-950 border border-zinc-800 hover:border-yellow-500 p-6 rounded-xl flex flex-col items-center justify-center gap-3 transition-colors">
+                                  <Folder className="w-10 h-10 text-yellow-500" />
+                                  <span className="font-bold text-white uppercase tracking-wider text-sm">{week}</span>
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        }
+
+                        // Level 3: Daily Records inside selected week
+                        const finalRecords = records.filter(r => r.name === archiveAgent && r.weekLogged === archiveWeek);
+                        return (
+                          <div className="space-y-3">
+                            <h3 className="text-zinc-400 font-bold uppercase tracking-widest text-xs mb-4">{archiveAgent} - {archiveWeek}</h3>
+                            {finalRecords.map((record, i) => (
+                              <div key={i} className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex flex-col gap-3">
+                                <span className="text-xs text-white font-bold tracking-widest uppercase border-b border-zinc-800 pb-2">{record.dateLogged}</span>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                  <div><span className="block text-[10px] text-zinc-500 uppercase">Turnover</span><span className="font-bold text-yellow-500">R{record.actual}</span><span className="text-zinc-600 text-[10px] block">/ R{record.target}</span></div>
+                                  <div><span className="block text-[10px] text-zinc-500 uppercase">Units</span><span className="font-bold text-blue-400">{record.unitsActual}</span><span className="text-zinc-600 text-[10px] block">/ {record.unitsTarget}</span></div>
+                                  <div><span className="block text-[10px] text-zinc-500 uppercase">Crep</span><span className="font-bold text-emerald-400">{record.crepActual}</span><span className="text-zinc-600 text-[10px] block">/ {record.crepTarget}</span></div>
+                                  <div><span className="block text-[10px] text-zinc-500 uppercase">2-For-650</span><span className="font-bold text-purple-400">{record.twoForActual}</span><span className="text-zinc-600 text-[10px] block">/ {record.twoForTarget}</span></div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </>
@@ -473,4 +527,3 @@ export default function JDRunnerApp() {
     </div>
   );
 }
- 
