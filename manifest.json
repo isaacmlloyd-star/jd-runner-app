@@ -7,11 +7,10 @@
   "theme_color": "#facc15",
   "icons": [
     {
-      "src": "icon.png",
+      "src": "The runner_20261011_113824_0000.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
   ]
 }
- 
