@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Activity, AlertTriangle, CheckCircle2, Share2, Download, LogIn, Target, TrendingUp, Users, Briefcase, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Share2, Download, LogIn, Target, TrendingUp, Users, Briefcase, ChevronDown, ChevronUp, MessageSquare, Lightbulb } from 'lucide-react';
 
 function useStickyState(defaultValue, key) {
   const [value, setValue] = useState(() => {
@@ -15,7 +15,7 @@ function useStickyState(defaultValue, key) {
 }
 
 export default function JDRunnerApp() {
-  const [currentScreen, setCurrentScreen] = useState('landing'); // landing | app | management
+  const [currentScreen, setCurrentScreen] = useState('landing'); 
   const [department, setDepartment] = useStickyState('Men', 'jd_dept');
   const [subDivision, setSubDivision] = useStickyState('Footwear', 'jd_subdept');
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -36,7 +36,7 @@ export default function JDRunnerApp() {
   // --- MANAGEMENT DATA ---
   const [mgmtDept, setMgmtDept] = useState('Men');
   const [mgmtStaff, setMgmtStaff] = useStickyState({ Men: [], Women: [], Juniors: [], Children: [], POS: [] }, 'jd_mgmt_staff');
-  const [newAgent, setNewAgent] = useState({ name: '', target: '', unitsTarget: '', crepTarget: '' });
+  const [newAgent, setNewAgent] = useState({ name: '', target: '', unitsTarget: '', crepTarget: '', twoForTarget: '' });
   const [expandedAgentId, setExpandedAgentId] = useState(null);
 
   const departments = ['Men', 'Women', 'Juniors', 'Children', 'POS'];
@@ -89,10 +89,13 @@ export default function JDRunnerApp() {
     if (!newAgent.name) return;
     const agent = {
       id: Date.now(), name: newAgent.name, target: parseFloat(newAgent.target) || 0, actual: 0,
-      unitsTarget: parseInt(newAgent.unitsTarget) || 0, unitsActual: 0, crepTarget: parseInt(newAgent.crepTarget) || 0, crepActual: 0, feedback: ''
+      unitsTarget: parseInt(newAgent.unitsTarget) || 0, unitsActual: 0, 
+      crepTarget: parseInt(newAgent.crepTarget) || 0, crepActual: 0, 
+      twoForTarget: parseInt(newAgent.twoForTarget) || 0, twoForActual: 0, 
+      feedback: ''
     };
     setMgmtStaff({ ...mgmtStaff, [mgmtDept]: [...mgmtStaff[mgmtDept], agent] });
-    setNewAgent({ name: '', target: '', unitsTarget: '', crepTarget: '' });
+    setNewAgent({ name: '', target: '', unitsTarget: '', crepTarget: '', twoForTarget: '' });
   };
 
   const updateAgent = (agentId, field, value) => {
@@ -106,6 +109,27 @@ export default function JDRunnerApp() {
     if (ratio >= 1) return { label: 'Crushing It', color: 'text-emerald-400', bg: 'bg-emerald-950 border-emerald-900' };
     if (ratio >= 0.5) return { label: 'On Track', color: 'text-blue-400', bg: 'bg-blue-950 border-blue-900' };
     return { label: 'Falling Short', color: 'text-red-400', bg: 'bg-red-950 border-red-900' };
+  };
+
+  const generateCoachingSuggestion = (agent) => {
+    if (agent.target === 0) return "Awaiting shift data to generate coaching strategy.";
+    
+    const toRatio = agent.target > 0 ? agent.actual / agent.target : 0;
+    const unitsRatio = agent.unitsTarget > 0 ? agent.unitsActual / agent.unitsTarget : 0;
+    const crepRatio = agent.crepTarget > 0 ? agent.crepActual / agent.crepTarget : 0;
+    const twoForRatio = agent.twoForTarget > 0 ? agent.twoForActual / agent.twoForTarget : 0;
+
+    if (toRatio < 0.4 && unitsRatio > 0.6) {
+      return "Assist the agent to strategize a way to increase their basket size. They are moving units but falling short on high-ticket turnover.";
+    } else if (crepRatio < 0.3 && agent.crepTarget > 0) {
+      return "Assist the agent to strategize a way to increase their Crep attach rate during the shoe-fitting stage.";
+    } else if (twoForRatio < 0.3 && agent.twoForTarget > 0) {
+      return "Assist the agent to strategize a way to push the 2-for-650 apparel promos at the fitting room to increase volume.";
+    } else if (toRatio < 0.5) {
+      return "Assist the agent to strategize a way to intercept unassisted traffic earlier to build bigger baskets.";
+    } else {
+      return "Agent is performing well. Maintain floor momentum and assist with closing high-value walk-ins.";
+    }
   };
 
   // ================= LANDING SCREEN =================
@@ -160,6 +184,8 @@ export default function JDRunnerApp() {
               <div className="col-span-2"><input type="text" placeholder="Agent Name" value={newAgent.name} onChange={e => setNewAgent({...newAgent, name: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-blue-500" required /></div>
               <div><input type="number" placeholder="T/O Target (R)" value={newAgent.target} onChange={e => setNewAgent({...newAgent, target: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" required /></div>
               <div><input type="number" placeholder="Units Target" value={newAgent.unitsTarget} onChange={e => setNewAgent({...newAgent, unitsTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" /></div>
+              <div><input type="number" placeholder="Crep Target" value={newAgent.crepTarget} onChange={e => setNewAgent({...newAgent, crepTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" /></div>
+              <div><input type="number" placeholder="2-For-650 Target" value={newAgent.twoForTarget} onChange={e => setNewAgent({...newAgent, twoForTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" /></div>
               <div className="col-span-2"><button type="submit" className="w-full bg-blue-600 text-white font-black uppercase tracking-widest py-3 rounded-lg text-xs active:scale-95">Add Agent</button></div>
             </div>
           </form>
@@ -179,20 +205,31 @@ export default function JDRunnerApp() {
                       <div className="flex justify-between items-center mb-3">
                         <h3 className="font-black text-lg text-white uppercase tracking-wider">{agent.name}</h3>
                         <div className="text-right">
-                          <span className="block text-[10px] text-zinc-500 uppercase tracking-widest">Target</span>
+                          <span className="block text-[10px] text-zinc-500 uppercase tracking-widest">T/O Target</span>
                           <span className="font-bold text-zinc-300">R{agent.target}</span>
                         </div>
                       </div>
+                      
+                      {/* LIVE ACTUALS GRID */}
                       <div className="grid grid-cols-2 gap-3 mb-4">
                         <div>
                           <label className="text-[10px] font-bold text-yellow-500 uppercase">Live T/O Actual (R)</label>
-                          <input type="number" value={agent.actual || ''} onChange={e => updateAgent(agent.id, 'actual', parseFloat(e.target.value) || 0)} className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-2 text-yellow-400 font-bold focus:outline-none" />
+                          <input type="number" value={agent.actual || ''} onChange={e => updateAgent(agent.id, 'actual', parseFloat(e.target.value) || 0)} className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-2 text-yellow-400 font-bold focus:outline-none" placeholder={`Target: R${agent.target}`} />
                         </div>
                         <div>
                           <label className="text-[10px] font-bold text-blue-400 uppercase">Live Units Actual</label>
-                          <input type="number" value={agent.unitsActual || ''} onChange={e => updateAgent(agent.id, 'unitsActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-blue-900/50 rounded-lg p-2 text-blue-400 focus:outline-none" />
+                          <input type="number" value={agent.unitsActual || ''} onChange={e => updateAgent(agent.id, 'unitsActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-blue-900/50 rounded-lg p-2 text-blue-400 focus:outline-none" placeholder={`Target: ${agent.unitsTarget}`} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-emerald-400 uppercase">Live Crep Actual</label>
+                          <input type="number" value={agent.crepActual || ''} onChange={e => updateAgent(agent.id, 'crepActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-emerald-900/50 rounded-lg p-2 text-emerald-400 focus:outline-none" placeholder={`Target: ${agent.crepTarget}`} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-purple-400 uppercase">Live 2-For-650 Actual</label>
+                          <input type="number" value={agent.twoForActual || ''} onChange={e => updateAgent(agent.id, 'twoForActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-purple-900/50 rounded-lg p-2 text-purple-400 focus:outline-none" placeholder={`Target: ${agent.twoForTarget}`} />
                         </div>
                       </div>
+
                       <button onClick={() => setExpandedAgentId(isExpanded ? null : agent.id)} className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold uppercase tracking-widest py-3 rounded-lg text-[10px] flex items-center justify-center gap-2 transition-colors">
                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />} Display Performance Level
                       </button>
@@ -206,12 +243,18 @@ export default function JDRunnerApp() {
                           <span className="ml-auto text-xs font-bold text-zinc-400">{Math.round((agent.actual / agent.target) * 100) || 0}% to Target</span>
                         </div>
                         
+                        {/* AUTOMATED COACHING ENGINE */}
+                        <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800 mb-4">
+                          <p className="text-[11px] font-bold text-zinc-400 uppercase flex items-center gap-1 mb-2"><Lightbulb className="w-3 h-3 text-yellow-500" /> Automated Strategy</p>
+                          <p className="text-sm text-zinc-300 italic">"{generateCoachingSuggestion(agent)}"</p>
+                        </div>
+
                         <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-zinc-400 uppercase flex items-center gap-1"><MessageSquare className="w-3 h-3"/> Manager Coaching / Focus Next</label>
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase flex items-center gap-1"><MessageSquare className="w-3 h-3"/> Manager Direct Coaching Notes</label>
                           <textarea 
                             value={agent.feedback} 
                             onChange={e => updateAgent(agent.id, 'feedback', e.target.value)} 
-                            placeholder="e.g. You are falling short on turnover. Pitch higher ticket items at the fitting room."
+                            placeholder="Type specific floor instructions for this agent here..."
                             className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:outline-none focus:border-zinc-500 h-24 resize-none"
                           />
                         </div>
