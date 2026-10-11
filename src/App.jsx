@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Activity, AlertTriangle, CheckCircle2, Tag, Share2, Download, LogIn, Target, TrendingUp } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Share2, Download, LogIn, Target, TrendingUp, Users, Briefcase, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 
 function useStickyState(defaultValue, key) {
   const [value, setValue] = useState(() => {
@@ -15,12 +15,13 @@ function useStickyState(defaultValue, key) {
 }
 
 export default function JDRunnerApp() {
-  const [currentScreen, setCurrentScreen] = useState('landing'); 
+  const [currentScreen, setCurrentScreen] = useState('landing'); // landing | app | management
   const [department, setDepartment] = useStickyState('Men', 'jd_dept');
   const [subDivision, setSubDivision] = useStickyState('Footwear', 'jd_subdept');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [copied, setCopied] = useState(false);
 
+  // --- AGENT DATA ---
   const [ledger, setLedger] = useStickyState([
     { date: '06/10/26', target: 20000, actual: 9000, crepTarget: 10, crepActual: 0, unitsTarget: 16, unitsActual: 3, twoForTarget: 0, twoForActual: 0 },
     { date: '07/10/26', target: 12000, actual: 3000, crepTarget: 10, crepActual: 0, unitsTarget: 16, unitsActual: 0, twoForTarget: 0, twoForActual: 0 },
@@ -29,19 +30,19 @@ export default function JDRunnerApp() {
     { date: '10/10/26', target: 40000, actual: 8000, crepTarget: 10, crepActual: 5, unitsTarget: 16, unitsActual: 14, twoForTarget: 10, twoForActual: 2 }
   ], 'jd_performance_ledger');
 
-  // Dedicated state for Daily Targets (persists all day)
-  const [dailyTargets, setDailyTargets] = useStickyState({
-    target: '40000', unitsTarget: '16', crepTarget: '10', twoForTarget: '10'
-  }, 'jd_daily_targets');
+  const [dailyTargets, setDailyTargets] = useStickyState({ target: '40000', unitsTarget: '16', crepTarget: '10', twoForTarget: '10' }, 'jd_daily_targets');
+  const [actualsForm, setActualsForm] = useState({ date: '', actual: '', unitsActual: '', crepActual: '', twoForActual: '' });
 
-  // Dedicated state for EOD Actuals
-  const [actualsForm, setActualsForm] = useState({
-    date: '', actual: '', unitsActual: '', crepActual: '', twoForActual: ''
-  });
+  // --- MANAGEMENT DATA ---
+  const [mgmtDept, setMgmtDept] = useState('Men');
+  const [mgmtStaff, setMgmtStaff] = useStickyState({ Men: [], Women: [], Juniors: [], Children: [], POS: [] }, 'jd_mgmt_staff');
+  const [newAgent, setNewAgent] = useState({ name: '', target: '', unitsTarget: '', crepTarget: '' });
+  const [expandedAgentId, setExpandedAgentId] = useState(null);
 
   const departments = ['Men', 'Women', 'Juniors', 'Children', 'POS'];
   const subDivisions = ['Footwear', 'Apparel'];
 
+  // --- AGENT INSIGHTS ENGINE ---
   const insights = useMemo(() => {
     if (ledger.length === 0) return { strengths: [], weaknesses: [], strategies: [] };
     const latest = ledger[ledger.length - 1];
@@ -57,81 +58,176 @@ export default function JDRunnerApp() {
       weaknesses.push("ATV Gap: High units but low turnover.");
       strategies.push("STRATEGY: You are selling too many low-ticket items. Leverage floor teamwork to pass customers and cross-sell high-ticket footwear to bridge the turnover gap.");
     }
-
-    if (latest.twoForActual === 0 && latest.twoForTarget > 0) {
-      strategies.push("STRATEGY: Push the 2-for-650 promos harder at the fitting rooms to instantly double unit volume.");
-    }
-
+    if (latest.twoForActual === 0 && latest.twoForTarget > 0) strategies.push("STRATEGY: Push the 2-for-650 promos harder at the fitting rooms to instantly double unit volume.");
     return { strengths, weaknesses, strategies };
   }, [ledger]);
 
+  // --- HANDLERS ---
   const handleCopyToWhatsApp = (entry) => {
     const text = `End of business day numbers\n${entry.date}\n\n🗒Name: Isaac\n🎯Target: ${entry.target / 1000}k\n📍Actual: ${entry.actual / 1000}k\n💈Crep target: ${entry.crepTarget}\n📍Crep actual: ${entry.crepActual}\n🎫All Units Targets: ${entry.unitsTarget}\n📍All Units Actual: ${entry.unitsActual}\n👕 2 For 650 Target: ${entry.twoForTarget}\n📍2 For 650 Actual: ${entry.twoForActual}`;
-    
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
   };
-
-  const handleDownloadSheet = () => { window.print(); };
 
   const handleSaveLog = (e) => {
     e.preventDefault();
-    if (!actualsForm.date || !actualsForm.actual) {
-      alert("Please enter at least the Date and Turnover Actual.");
-      return;
-    }
-
+    if (!actualsForm.date || !actualsForm.actual) { alert("Please enter Date and Turnover Actual."); return; }
     const newEntry = {
-      date: actualsForm.date,
-      target: parseFloat(dailyTargets.target) || 0,
-      actual: parseFloat(actualsForm.actual) || 0,
-      crepTarget: parseInt(dailyTargets.crepTarget) || 0,
-      crepActual: parseInt(actualsForm.crepActual) || 0,
-      unitsTarget: parseInt(dailyTargets.unitsTarget) || 0,
-      unitsActual: parseInt(actualsForm.unitsActual) || 0,
-      twoForTarget: parseInt(dailyTargets.twoForTarget) || 0,
-      twoForActual: parseInt(actualsForm.twoForActual) || 0,
+      date: actualsForm.date, target: parseFloat(dailyTargets.target) || 0, actual: parseFloat(actualsForm.actual) || 0,
+      crepTarget: parseInt(dailyTargets.crepTarget) || 0, crepActual: parseInt(actualsForm.crepActual) || 0,
+      unitsTarget: parseInt(dailyTargets.unitsTarget) || 0, unitsActual: parseInt(actualsForm.unitsActual) || 0,
+      twoForTarget: parseInt(dailyTargets.twoForTarget) || 0, twoForActual: parseInt(actualsForm.twoForActual) || 0,
     };
-    
     setLedger([...ledger, newEntry]);
     alert("Shift data locked in.");
     setActiveTab('dashboard');
-    // Clear actuals for the next shift, but keep the targets locked in
     setActualsForm({ date: '', actual: '', unitsActual: '', crepActual: '', twoForActual: '' });
   };
 
+  // --- MANAGEMENT HANDLERS ---
+  const handleAddAgent = (e) => {
+    e.preventDefault();
+    if (!newAgent.name) return;
+    const agent = {
+      id: Date.now(), name: newAgent.name, target: parseFloat(newAgent.target) || 0, actual: 0,
+      unitsTarget: parseInt(newAgent.unitsTarget) || 0, unitsActual: 0, crepTarget: parseInt(newAgent.crepTarget) || 0, crepActual: 0, feedback: ''
+    };
+    setMgmtStaff({ ...mgmtStaff, [mgmtDept]: [...mgmtStaff[mgmtDept], agent] });
+    setNewAgent({ name: '', target: '', unitsTarget: '', crepTarget: '' });
+  };
+
+  const updateAgent = (agentId, field, value) => {
+    const updatedDept = mgmtStaff[mgmtDept].map(a => a.id === agentId ? { ...a, [field]: value } : a);
+    setMgmtStaff({ ...mgmtStaff, [mgmtDept]: updatedDept });
+  };
+
+  const getPerformanceStatus = (agent) => {
+    if (agent.target === 0) return { label: 'Pending Targets', color: 'text-zinc-400', bg: 'bg-zinc-900' };
+    const ratio = agent.actual / agent.target;
+    if (ratio >= 1) return { label: 'Crushing It', color: 'text-emerald-400', bg: 'bg-emerald-950 border-emerald-900' };
+    if (ratio >= 0.5) return { label: 'On Track', color: 'text-blue-400', bg: 'bg-blue-950 border-blue-900' };
+    return { label: 'Falling Short', color: 'text-red-400', bg: 'bg-red-950 border-red-900' };
+  };
+
+  // ================= LANDING SCREEN =================
   if (currentScreen === 'landing') {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 selection:bg-yellow-500 selection:text-black">
-        <div className="bg-yellow-400 text-black font-black text-5xl px-6 py-2 italic tracking-tighter skew-x-[-10deg] mb-8 shadow-[0_0_30px_rgba(250,204,21,0.3)]">JD</div>
-        <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl w-full max-w-md shadow-2xl">
-          <h2 className="text-xl font-bold uppercase tracking-widest text-zinc-100 mb-6 text-center">Select Floor Zone</h2>
-          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Department</label>
-          <div className="grid grid-cols-2 gap-3 mb-6 mt-2">
-            {departments.map(d => (
-              <button key={d} onClick={() => { setDepartment(d); setSubDivision(d === 'POS' ? 'None' : 'Footwear'); }} className={`py-3 rounded-lg font-bold uppercase tracking-wider transition-all ${department === d ? 'bg-yellow-400 text-black shadow-lg' : 'bg-zinc-950 text-zinc-400 border border-zinc-800'}`}>{d}</button>
-            ))}
-          </div>
-          {department !== 'POS' && (
-            <>
-              <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Sub-Division</label>
-              <div className="grid grid-cols-2 gap-3 mb-8 mt-2">
-                {subDivisions.map(sd => (
-                  <button key={sd} onClick={() => setSubDivision(sd)} className={`py-3 rounded-lg font-bold uppercase tracking-wider transition-all ${subDivision === sd ? 'bg-zinc-700 text-white shadow-lg' : 'bg-zinc-950 text-zinc-500 border border-zinc-800'}`}>{sd}</button>
-                ))}
-              </div>
-            </>
-          )}
-          <button onClick={() => setCurrentScreen('app')} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest py-4 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-95">
-            <LogIn className="w-5 h-5" /> Initialize Dashboard
+        <div className="bg-yellow-400 text-black font-black text-5xl px-6 py-2 italic tracking-tighter skew-x-[-10deg] mb-12 shadow-[0_0_30px_rgba(250,204,21,0.3)]">JD</div>
+        
+        <div className="w-full max-w-md space-y-4">
+          <button onClick={() => setCurrentScreen('app')} className="w-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white p-6 rounded-2xl transition-all flex flex-col items-center gap-3">
+            <Users className="w-8 h-8 text-yellow-400" />
+            <span className="font-black uppercase tracking-widest text-lg">Agent Terminal</span>
+            <span className="text-xs text-zinc-500 uppercase">Log personal floor metrics</span>
+          </button>
+
+          <button onClick={() => setCurrentScreen('management')} className="w-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white p-6 rounded-2xl transition-all flex flex-col items-center gap-3">
+            <Briefcase className="w-8 h-8 text-blue-400" />
+            <span className="font-black uppercase tracking-widest text-lg">Management Console</span>
+            <span className="text-xs text-zinc-500 uppercase">Track zone agents & provide coaching</span>
           </button>
         </div>
       </div>
     );
   }
 
+  // ================= MANAGEMENT CONSOLE =================
+  if (currentScreen === 'management') {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-200 font-sans">
+        <header className="bg-black border-b border-zinc-800 sticky top-0 z-50">
+          <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-600 text-white font-black text-xl px-2 py-0.5 italic tracking-tighter skew-x-[-10deg]">JD</div>
+              <h1 className="text-sm font-bold uppercase tracking-widest text-zinc-100">Management<span className="text-blue-500">OS</span></h1>
+            </div>
+            <button onClick={() => setCurrentScreen('landing')} className="text-xs font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 px-3 py-1 rounded bg-zinc-900">Exit</button>
+          </div>
+          
+          <div className="flex overflow-x-auto scrollbar-hide border-t border-zinc-900">
+            {departments.map(d => (
+              <button key={d} onClick={() => setMgmtDept(d)} className={`px-6 py-4 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all border-b-2 ${mgmtDept === d ? 'border-blue-500 text-blue-400 bg-blue-950/20' : 'border-transparent text-zinc-500'}`}>
+                {d}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+          <form onSubmit={handleAddAgent} className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-lg">
+            <h2 className="text-xs font-black uppercase tracking-widest text-blue-400 mb-4">Deploy Agent to {mgmtDept}</h2>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2"><input type="text" placeholder="Agent Name" value={newAgent.name} onChange={e => setNewAgent({...newAgent, name: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-blue-500" required /></div>
+              <div><input type="number" placeholder="T/O Target (R)" value={newAgent.target} onChange={e => setNewAgent({...newAgent, target: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" required /></div>
+              <div><input type="number" placeholder="Units Target" value={newAgent.unitsTarget} onChange={e => setNewAgent({...newAgent, unitsTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" /></div>
+              <div className="col-span-2"><button type="submit" className="w-full bg-blue-600 text-white font-black uppercase tracking-widest py-3 rounded-lg text-xs active:scale-95">Add Agent</button></div>
+            </div>
+          </form>
+
+          <div className="space-y-4">
+            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-500">{mgmtDept} Floor Roster</h2>
+            {mgmtStaff[mgmtDept].length === 0 ? (
+              <p className="text-zinc-600 text-xs italic">No agents deployed in this zone.</p>
+            ) : (
+              mgmtStaff[mgmtDept].map(agent => {
+                const status = getPerformanceStatus(agent);
+                const isExpanded = expandedAgentId === agent.id;
+                
+                return (
+                  <div key={agent.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-lg">
+                    <div className="p-4 border-b border-zinc-800">
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-black text-lg text-white uppercase tracking-wider">{agent.name}</h3>
+                        <div className="text-right">
+                          <span className="block text-[10px] text-zinc-500 uppercase tracking-widest">Target</span>
+                          <span className="font-bold text-zinc-300">R{agent.target}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 mb-4">
+                        <div>
+                          <label className="text-[10px] font-bold text-yellow-500 uppercase">Live T/O Actual (R)</label>
+                          <input type="number" value={agent.actual || ''} onChange={e => updateAgent(agent.id, 'actual', parseFloat(e.target.value) || 0)} className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-2 text-yellow-400 font-bold focus:outline-none" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-blue-400 uppercase">Live Units Actual</label>
+                          <input type="number" value={agent.unitsActual || ''} onChange={e => updateAgent(agent.id, 'unitsActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-blue-900/50 rounded-lg p-2 text-blue-400 focus:outline-none" />
+                        </div>
+                      </div>
+                      <button onClick={() => setExpandedAgentId(isExpanded ? null : agent.id)} className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold uppercase tracking-widest py-3 rounded-lg text-[10px] flex items-center justify-center gap-2 transition-colors">
+                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />} Display Performance Level
+                      </button>
+                    </div>
+
+                    {isExpanded && (
+                      <div className={`p-4 border-t border-zinc-800 ${status.bg}`}>
+                        <div className="flex items-center gap-2 mb-4">
+                          <Activity className={`w-5 h-5 ${status.color}`} />
+                          <span className={`font-black uppercase tracking-widest ${status.color}`}>{status.label}</span>
+                          <span className="ml-auto text-xs font-bold text-zinc-400">{Math.round((agent.actual / agent.target) * 100) || 0}% to Target</span>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase flex items-center gap-1"><MessageSquare className="w-3 h-3"/> Manager Coaching / Focus Next</label>
+                          <textarea 
+                            value={agent.feedback} 
+                            onChange={e => updateAgent(agent.id, 'feedback', e.target.value)} 
+                            placeholder="e.g. You are falling short on turnover. Pitch higher ticket items at the fitting room."
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:outline-none focus:border-zinc-500 h-24 resize-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ================= AGENT APP =================
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-200 font-sans">
       <header className="bg-black border-b border-zinc-800 sticky top-0 z-50 no-print">
@@ -143,7 +239,7 @@ export default function JDRunnerApp() {
               <span className="text-[10px] text-zinc-500 font-mono uppercase">{department} / {subDivision}</span>
             </div>
           </div>
-          <button onClick={() => setCurrentScreen('landing')} className="text-xs font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 px-3 py-1 rounded bg-zinc-900">Change Zone</button>
+          <button onClick={() => setCurrentScreen('landing')} className="text-xs font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 px-3 py-1 rounded bg-zinc-900">Exit</button>
         </div>
       </header>
 
@@ -164,7 +260,7 @@ export default function JDRunnerApp() {
               <button onClick={() => handleCopyToWhatsApp(ledger[ledger.length - 1])} className={`p-4 rounded-xl font-bold uppercase tracking-wider text-xs flex flex-col items-center justify-center gap-2 transition-all active:scale-95 ${copied ? 'bg-emerald-600 text-white' : 'bg-zinc-900 border border-zinc-800 text-zinc-300'}`}>
                 {copied ? <CheckCircle2 /> : <Share2 />} {copied ? 'Copied Data' : 'WhatsApp Export'}
               </button>
-              <button onClick={handleDownloadSheet} className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl font-bold uppercase tracking-wider text-xs flex flex-col items-center justify-center gap-2 text-zinc-300 transition-all active:scale-95">
+              <button onClick={() => window.print()} className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl font-bold uppercase tracking-wider text-xs flex flex-col items-center justify-center gap-2 text-zinc-300 transition-all active:scale-95">
                 <Download /> Download PDF
               </button>
             </div>
@@ -194,56 +290,29 @@ export default function JDRunnerApp() {
                     <XAxis dataKey="date" stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} />
                     <YAxis stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v => `${v/1000}k`} />
                     <Tooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', color: '#fff', fontSize: '12px' }} />
-                    <Area type="monotone" dataKey="target" stroke="#52525b" fillOpacity={0.2} fill="#52525b" name="Target" />
-                    <Area type="monotone" dataKey="actual" stroke="#facc15" strokeWidth={3} fillOpacity={0.3} fill="#facc15" name="Actual" />
+                    <Area type="monotone" dataKey="target" stroke="#52525b" fillOpacity={0.2} fill="#52525b" />
+                    <Area type="monotone" dataKey="actual" stroke="#facc15" strokeWidth={3} fillOpacity={0.3} fill="#facc15" />
                   </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-              <h3 className="text-zinc-100 font-bold uppercase tracking-widest text-xs flex items-center gap-2 mb-4">Units & Add-Ons</h3>
-              <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={ledger} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                    <XAxis dataKey="date" stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', color: '#fff', fontSize: '12px' }} cursor={{fill: '#18181b'}} />
-                    <Legend wrapperStyle={{ fontSize: '10px' }}/>
-                    <Bar dataKey="unitsActual" fill="#facc15" name="Units" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="crepActual" fill="#3b82f6" name="Creps" radius={[4, 4, 0, 0]} />
-                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </div>
         ) : (
           <div className="space-y-6">
-            
-            {/* SECTION 1: SET DAILY TARGETS */}
             <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 shadow-xl">
               <h2 className="text-sm font-black uppercase tracking-widest text-zinc-100 mb-4 flex items-center gap-2"><Target className="w-4 h-4 text-zinc-400" /> 1. Store Targets (Adjust as needed)</h2>
-              <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-4">These lock in automatically for the entire shift.</p>
-              
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase">Turnover Target</label><input type="number" value={dailyTargets.target} onChange={e => setDailyTargets({...dailyTargets, target: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-zinc-500" /></div>
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase">Units Target</label><input type="number" value={dailyTargets.unitsTarget} onChange={e => setDailyTargets({...dailyTargets, unitsTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-zinc-500" /></div>
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase">Crep Target</label><input type="number" value={dailyTargets.crepTarget} onChange={e => setDailyTargets({...dailyTargets, crepTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-zinc-500" /></div>
-                <div><label className="text-[10px] font-bold text-zinc-500 uppercase">2-For-650 Target</label><input type="number" value={dailyTargets.twoForTarget} onChange={e => setDailyTargets({...dailyTargets, twoForTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none focus:border-zinc-500" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase">Turnover Target</label><input type="number" value={dailyTargets.target} onChange={e => setDailyTargets({...dailyTargets, target: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase">Units Target</label><input type="number" value={dailyTargets.unitsTarget} onChange={e => setDailyTargets({...dailyTargets, unitsTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase">Crep Target</label><input type="number" value={dailyTargets.crepTarget} onChange={e => setDailyTargets({...dailyTargets, crepTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none" /></div>
+                <div><label className="text-[10px] font-bold text-zinc-500 uppercase">2-For-650 Target</label><input type="number" value={dailyTargets.twoForTarget} onChange={e => setDailyTargets({...dailyTargets, twoForTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white focus:outline-none" /></div>
               </div>
             </div>
 
-            {/* SECTION 2: LOG ACTUALS */}
-            <form onSubmit={handleSaveLog} className="bg-zinc-900 p-6 rounded-2xl border border-yellow-500/30 shadow-[0_0_20px_rgba(250,204,21,0.05)]">
+            <form onSubmit={handleSaveLog} className="bg-zinc-900 p-6 rounded-2xl border border-yellow-500/30">
               <h2 className="text-sm font-black uppercase tracking-widest text-yellow-400 mb-4 flex items-center gap-2"><TrendingUp className="w-4 h-4" /> 2. Log EOD Actuals</h2>
-              
               <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-bold text-yellow-500/70 uppercase tracking-widest">Date (DD/MM/YY)</label>
-                  <input type="text" value={actualsForm.date} onChange={e => setActualsForm({...actualsForm, date: e.target.value})} required className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-3 text-white focus:outline-none focus:border-yellow-400" />
-                </div>
-                
+                <div><label className="text-[10px] font-bold text-yellow-500/70 uppercase tracking-widest">Date (DD/MM/YY)</label><input type="text" value={actualsForm.date} onChange={e => setActualsForm({...actualsForm, date: e.target.value})} required className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-3 text-white focus:outline-none" /></div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2"><label className="text-[10px] font-bold text-yellow-500/70 uppercase">Turnover Actual (R)</label><input type="number" value={actualsForm.actual} onChange={e => setActualsForm({...actualsForm, actual: e.target.value})} required className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-3 text-yellow-400 text-lg font-bold focus:outline-none" /></div>
                   <div><label className="text-[10px] font-bold text-yellow-500/70 uppercase">Units Actual</label><input type="number" value={actualsForm.unitsActual} onChange={e => setActualsForm({...actualsForm, unitsActual: e.target.value})} className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-3 text-white focus:outline-none" /></div>
@@ -251,9 +320,8 @@ export default function JDRunnerApp() {
                   <div className="col-span-2"><label className="text-[10px] font-bold text-yellow-500/70 uppercase">2-For-650 Actual</label><input type="number" value={actualsForm.twoForActual} onChange={e => setActualsForm({...actualsForm, twoForActual: e.target.value})} className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-3 text-white focus:outline-none" /></div>
                 </div>
               </div>
-              <button type="submit" className="w-full bg-yellow-400 text-black font-black uppercase tracking-widest py-4 rounded-lg mt-6 active:scale-95 shadow-[0_0_15px_rgba(250,204,21,0.4)]">Save to Ledger</button>
+              <button type="submit" className="w-full bg-yellow-400 text-black font-black uppercase tracking-widest py-4 rounded-lg mt-6 active:scale-95">Save to Ledger</button>
             </form>
-
           </div>
         )}
       </main>
