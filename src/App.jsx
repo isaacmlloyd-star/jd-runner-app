@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Activity, AlertTriangle, CheckCircle2, Share2, Download, LogIn, Target, TrendingUp, Users, Briefcase, ChevronDown, ChevronUp, MessageSquare, Lightbulb } from 'lucide-react';
+import { Activity, CheckCircle2, Share2, Download, LogIn, Target, TrendingUp, Users, Briefcase, ChevronDown, ChevronUp, MessageSquare, Lightbulb, FolderOpen, Save } from 'lucide-react';
 
 function useStickyState(defaultValue, key) {
   const [value, setValue] = useState(() => {
@@ -34,13 +34,24 @@ export default function JDRunnerApp() {
   const [actualsForm, setActualsForm] = useState({ date: '', actual: '', unitsActual: '', crepActual: '', twoForActual: '' });
 
   // --- MANAGEMENT DATA ---
+  const [mgmtTab, setMgmtTab] = useState('live'); // 'live' | 'archive'
   const [mgmtDept, setMgmtDept] = useState('Men');
+  const [archiveMonth, setArchiveMonth] = useState('');
+  
   const [mgmtStaff, setMgmtStaff] = useStickyState({ Men: [], Women: [], Juniors: [], Children: [], POS: [] }, 'jd_mgmt_staff');
+  const [mgmtArchive, setMgmtArchive] = useStickyState({}, 'jd_mgmt_archive'); // { "Oct 2026": { "Men": [ {date, name, actual...} ] } }
+  
   const [newAgent, setNewAgent] = useState({ name: '', target: '', unitsTarget: '', crepTarget: '', twoForTarget: '' });
   const [expandedAgentId, setExpandedAgentId] = useState(null);
 
   const departments = ['Men', 'Women', 'Juniors', 'Children', 'POS'];
   const subDivisions = ['Footwear', 'Apparel'];
+
+  // Set default archive month
+  useEffect(() => {
+    const months = Object.keys(mgmtArchive);
+    if (months.length > 0 && !archiveMonth) setArchiveMonth(months[months.length - 1]);
+  }, [mgmtArchive, archiveMonth]);
 
   // --- AGENT INSIGHTS ENGINE ---
   const insights = useMemo(() => {
@@ -83,6 +94,7 @@ export default function JDRunnerApp() {
     setActualsForm({ date: '', actual: '', unitsActual: '', crepActual: '', twoForActual: '' });
   };
 
+  // --- MANAGEMENT HANDLERS ---
   const handleAddAgent = (e) => {
     e.preventDefault();
     if (!newAgent.name) return;
@@ -100,6 +112,35 @@ export default function JDRunnerApp() {
   const updateAgent = (agentId, field, value) => {
     const updatedDept = mgmtStaff[mgmtDept].map(a => a.id === agentId ? { ...a, [field]: value } : a);
     setMgmtStaff({ ...mgmtStaff, [mgmtDept]: updatedDept });
+  };
+
+  const handleArchiveAndReset = () => {
+    const today = new Date();
+    const monthKey = today.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const dateStr = today.toLocaleDateString();
+
+    const newArchive = { ...mgmtArchive };
+    if (!newArchive[monthKey]) newArchive[monthKey] = { Men: [], Women: [], Juniors: [], Children: [], POS: [] };
+
+    // Clone current staff into archive, then reset active actuals
+    const updatedStaff = { ...mgmtStaff };
+    
+    departments.forEach(dept => {
+      mgmtStaff[dept].forEach(agent => {
+        if (agent.actual > 0 || agent.unitsActual > 0) {
+          newArchive[monthKey][dept].push({ ...agent, dateLogged: dateStr });
+        }
+      });
+      // Zero out live actuals
+      updatedStaff[dept] = mgmtStaff[dept].map(agent => ({
+        ...agent, actual: 0, unitsActual: 0, crepActual: 0, twoForActual: 0
+      }));
+    });
+
+    setMgmtArchive(newArchive);
+    setMgmtStaff(updatedStaff);
+    setArchiveMonth(monthKey);
+    alert(`Floor data archived to ${monthKey} folder. Live actuals have been reset to 0 for a new shift.`);
   };
 
   const getPerformanceStatus = (agent) => {
@@ -129,14 +170,12 @@ export default function JDRunnerApp() {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 selection:bg-yellow-500 selection:text-black">
         <div className="bg-yellow-400 text-black font-black text-5xl px-6 py-2 italic tracking-tighter skew-x-[-10deg] mb-12 shadow-[0_0_30px_rgba(250,204,21,0.3)]">JD</div>
-        
         <div className="w-full max-w-md space-y-4">
           <button onClick={() => setCurrentScreen('app')} className="w-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white p-6 rounded-2xl transition-all flex flex-col items-center gap-3">
             <Users className="w-8 h-8 text-yellow-400" />
             <span className="font-black uppercase tracking-widest text-lg">Agent Terminal</span>
             <span className="text-xs text-zinc-500 uppercase">Log personal floor metrics</span>
           </button>
-
           <button onClick={() => setCurrentScreen('management')} className="w-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-white p-6 rounded-2xl transition-all flex flex-col items-center gap-3">
             <Briefcase className="w-8 h-8 text-blue-400" />
             <span className="font-black uppercase tracking-widest text-lg">Management Console</span>
@@ -150,7 +189,7 @@ export default function JDRunnerApp() {
   // ================= MANAGEMENT CONSOLE =================
   if (currentScreen === 'management') {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-200 font-sans">
+      <div className="min-h-screen bg-zinc-950 text-zinc-200 font-sans flex flex-col">
         <header className="bg-black border-b border-zinc-800 sticky top-0 z-50">
           <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -159,102 +198,160 @@ export default function JDRunnerApp() {
             </div>
             <button onClick={() => setCurrentScreen('landing')} className="text-xs font-bold text-zinc-500 uppercase tracking-widest border border-zinc-800 px-3 py-1 rounded bg-zinc-900">Exit</button>
           </div>
-          
-          <div className="flex overflow-x-auto scrollbar-hide border-t border-zinc-900">
-            {departments.map(d => (
-              <button key={d} onClick={() => setMgmtDept(d)} className={`px-6 py-4 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all border-b-2 ${mgmtDept === d ? 'border-blue-500 text-blue-400 bg-blue-950/20' : 'border-transparent text-zinc-500'}`}>
-                {d}
-              </button>
-            ))}
+          <div className="flex border-t border-zinc-900">
+            <button onClick={() => setMgmtTab('live')} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest transition-all ${mgmtTab === 'live' ? 'bg-blue-950/40 text-blue-400 border-b-2 border-blue-500' : 'text-zinc-500 border-b-2 border-transparent'}`}>Live Floor</button>
+            <button onClick={() => setMgmtTab('archive')} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest transition-all ${mgmtTab === 'archive' ? 'bg-blue-950/40 text-blue-400 border-b-2 border-blue-500' : 'text-zinc-500 border-b-2 border-transparent'}`}>Monthly Archives</button>
           </div>
         </header>
 
-        <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-          <form onSubmit={handleAddAgent} className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-lg">
-            <h2 className="text-xs font-black uppercase tracking-widest text-blue-400 mb-4">Deploy Agent to {mgmtDept}</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2"><input type="text" placeholder="Agent Name" value={newAgent.name} onChange={e => setNewAgent({...newAgent, name: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-blue-500" required /></div>
-              <div><input type="number" placeholder="T/O Target (R)" value={newAgent.target} onChange={e => setNewAgent({...newAgent, target: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" required /></div>
-              <div><input type="number" placeholder="Units Target" value={newAgent.unitsTarget} onChange={e => setNewAgent({...newAgent, unitsTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" /></div>
-              <div><input type="number" placeholder="Crep Target" value={newAgent.crepTarget} onChange={e => setNewAgent({...newAgent, crepTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" /></div>
-              <div><input type="number" placeholder="2-For-650 Target" value={newAgent.twoForTarget} onChange={e => setNewAgent({...newAgent, twoForTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" /></div>
-              <div className="col-span-2"><button type="submit" className="w-full bg-blue-600 text-white font-black uppercase tracking-widest py-3 rounded-lg text-xs active:scale-95">Add Agent</button></div>
+        <main className="max-w-6xl mx-auto px-4 py-6 w-full flex-grow">
+          
+          {/* LIVE FLOOR TAB */}
+          {mgmtTab === 'live' && (
+            <div className="space-y-6">
+              
+              <div className="flex overflow-x-auto scrollbar-hide border-b border-zinc-800 pb-2">
+                {departments.map(d => (
+                  <button key={d} onClick={() => setMgmtDept(d)} className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all rounded-lg ${mgmtDept === d ? 'bg-blue-900/30 text-blue-400' : 'text-zinc-500'}`}>
+                    {d}
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={handleArchiveAndReset} className="w-full bg-emerald-950 border border-emerald-900 hover:bg-emerald-900 text-emerald-400 font-black uppercase tracking-widest py-4 rounded-xl flex items-center justify-center gap-2 transition-colors active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                <Save className="w-5 h-5" /> End Day & Reset Floor
+              </button>
+
+              <form onSubmit={handleAddAgent} className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-lg">
+                <h2 className="text-xs font-black uppercase tracking-widest text-blue-400 mb-4">Deploy Agent to {mgmtDept}</h2>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2"><input type="text" placeholder="Agent Name" value={newAgent.name} onChange={e => setNewAgent({...newAgent, name: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none focus:border-blue-500" required /></div>
+                  <div><input type="number" placeholder="T/O Target (R)" value={newAgent.target} onChange={e => setNewAgent({...newAgent, target: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" required /></div>
+                  <div><input type="number" placeholder="Units Target" value={newAgent.unitsTarget} onChange={e => setNewAgent({...newAgent, unitsTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" /></div>
+                  <div><input type="number" placeholder="Crep Target" value={newAgent.crepTarget} onChange={e => setNewAgent({...newAgent, crepTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" /></div>
+                  <div><input type="number" placeholder="2-For-650 Target" value={newAgent.twoForTarget} onChange={e => setNewAgent({...newAgent, twoForTarget: e.target.value})} className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-white text-sm focus:outline-none" /></div>
+                  <div className="col-span-2"><button type="submit" className="w-full bg-blue-600 text-white font-black uppercase tracking-widest py-3 rounded-lg text-xs active:scale-95">Add Agent</button></div>
+                </div>
+              </form>
+
+              <div className="space-y-4">
+                {mgmtStaff[mgmtDept].length === 0 ? (
+                  <p className="text-zinc-600 text-xs italic">No agents deployed in this zone.</p>
+                ) : (
+                  mgmtStaff[mgmtDept].map(agent => {
+                    const status = getPerformanceStatus(agent);
+                    const isExpanded = expandedAgentId === agent.id;
+                    return (
+                      <div key={agent.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-lg">
+                        <div className="p-4 border-b border-zinc-800">
+                          <div className="flex justify-between items-center mb-3">
+                            <h3 className="font-black text-lg text-white uppercase tracking-wider">{agent.name}</h3>
+                            <div className="text-right">
+                              <span className="block text-[10px] text-zinc-500 uppercase tracking-widest">T/O Target</span>
+                              <span className="font-bold text-zinc-300">R{agent.target}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div>
+                              <label className="text-[10px] font-bold text-yellow-500 uppercase">Live T/O Actual (R)</label>
+                              <input type="number" value={agent.actual || ''} onChange={e => updateAgent(agent.id, 'actual', parseFloat(e.target.value) || 0)} className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-2 text-yellow-400 font-bold focus:outline-none" placeholder={`Target: R${agent.target}`} />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-blue-400 uppercase">Live Units Actual</label>
+                              <input type="number" value={agent.unitsActual || ''} onChange={e => updateAgent(agent.id, 'unitsActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-blue-900/50 rounded-lg p-2 text-blue-400 focus:outline-none" placeholder={`Target: ${agent.unitsTarget}`} />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-emerald-400 uppercase">Live Crep Actual</label>
+                              <input type="number" value={agent.crepActual || ''} onChange={e => updateAgent(agent.id, 'crepActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-emerald-900/50 rounded-lg p-2 text-emerald-400 focus:outline-none" placeholder={`Target: ${agent.crepTarget}`} />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-purple-400 uppercase">Live 2-For-650 Actual</label>
+                              <input type="number" value={agent.twoForActual || ''} onChange={e => updateAgent(agent.id, 'twoForActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-purple-900/50 rounded-lg p-2 text-purple-400 focus:outline-none" placeholder={`Target: ${agent.twoForTarget}`} />
+                            </div>
+                          </div>
+                          <button onClick={() => setExpandedAgentId(isExpanded ? null : agent.id)} className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold uppercase tracking-widest py-3 rounded-lg text-[10px] flex items-center justify-center gap-2 transition-colors">
+                            {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />} Display Performance Level
+                          </button>
+                        </div>
+                        {isExpanded && (
+                          <div className={`p-4 border-t border-zinc-800 ${status.bg}`}>
+                            <div className="flex items-center gap-2 mb-4">
+                              <Activity className={`w-5 h-5 ${status.color}`} />
+                              <span className={`font-black uppercase tracking-widest ${status.color}`}>{status.label}</span>
+                              <span className="ml-auto text-xs font-bold text-zinc-400">{Math.round((agent.actual / agent.target) * 100) || 0}% to Target</span>
+                            </div>
+                            <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800 mb-4">
+                              <p className="text-[11px] font-bold text-zinc-400 uppercase flex items-center gap-1 mb-2"><Lightbulb className="w-3 h-3 text-yellow-500" /> Automated Strategy</p>
+                              <p className="text-sm text-zinc-300 italic">"{generateCoachingSuggestion(agent)}"</p>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-bold text-zinc-400 uppercase flex items-center gap-1"><MessageSquare className="w-3 h-3"/> Manager Direct Coaching Notes</label>
+                              <textarea value={agent.feedback} onChange={e => updateAgent(agent.id, 'feedback', e.target.value)} placeholder="Type specific floor instructions here..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:outline-none focus:border-zinc-500 h-24 resize-none" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
             </div>
-          </form>
+          )}
 
-          <div className="space-y-4">
-            <h2 className="text-xs font-black uppercase tracking-widest text-zinc-500">{mgmtDept} Floor Roster</h2>
-            {mgmtStaff[mgmtDept].length === 0 ? (
-              <p className="text-zinc-600 text-xs italic">No agents deployed in this zone.</p>
-            ) : (
-              mgmtStaff[mgmtDept].map(agent => {
-                const status = getPerformanceStatus(agent);
-                const isExpanded = expandedAgentId === agent.id;
-                
-                return (
-                  <div key={agent.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-lg">
-                    <div className="p-4 border-b border-zinc-800">
-                      <div className="flex justify-between items-center mb-3">
-                        <h3 className="font-black text-lg text-white uppercase tracking-wider">{agent.name}</h3>
-                        <div className="text-right">
-                          <span className="block text-[10px] text-zinc-500 uppercase tracking-widest">T/O Target</span>
-                          <span className="font-bold text-zinc-300">R{agent.target}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-3 mb-4">
-                        <div>
-                          <label className="text-[10px] font-bold text-yellow-500 uppercase">Live T/O Actual (R)</label>
-                          <input type="number" value={agent.actual || ''} onChange={e => updateAgent(agent.id, 'actual', parseFloat(e.target.value) || 0)} className="w-full bg-zinc-950 border border-yellow-500/30 rounded-lg p-2 text-yellow-400 font-bold focus:outline-none" placeholder={`Target: R${agent.target}`} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-blue-400 uppercase">Live Units Actual</label>
-                          <input type="number" value={agent.unitsActual || ''} onChange={e => updateAgent(agent.id, 'unitsActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-blue-900/50 rounded-lg p-2 text-blue-400 focus:outline-none" placeholder={`Target: ${agent.unitsTarget}`} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-emerald-400 uppercase">Live Crep Actual</label>
-                          <input type="number" value={agent.crepActual || ''} onChange={e => updateAgent(agent.id, 'crepActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-emerald-900/50 rounded-lg p-2 text-emerald-400 focus:outline-none" placeholder={`Target: ${agent.crepTarget}`} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-purple-400 uppercase">Live 2-For-650 Actual</label>
-                          <input type="number" value={agent.twoForActual || ''} onChange={e => updateAgent(agent.id, 'twoForActual', parseInt(e.target.value) || 0)} className="w-full bg-zinc-950 border border-purple-900/50 rounded-lg p-2 text-purple-400 focus:outline-none" placeholder={`Target: ${agent.twoForTarget}`} />
-                        </div>
-                      </div>
-
-                      <button onClick={() => setExpandedAgentId(isExpanded ? null : agent.id)} className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold uppercase tracking-widest py-3 rounded-lg text-[10px] flex items-center justify-center gap-2 transition-colors">
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />} Display Performance Level
+          {/* ARCHIVE TAB */}
+          {mgmtTab === 'archive' && (
+            <div className="space-y-6">
+              {Object.keys(mgmtArchive).length === 0 ? (
+                <div className="text-center py-12">
+                  <FolderOpen className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
+                  <p className="text-zinc-500 font-bold uppercase tracking-widest text-sm">No Archives Available</p>
+                  <p className="text-zinc-600 text-xs mt-2">End a day on the Live Floor to generate records.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex overflow-x-auto scrollbar-hide gap-2 pb-2">
+                    {Object.keys(mgmtArchive).map(month => (
+                      <button key={month} onClick={() => setArchiveMonth(month)} className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all rounded-lg border ${archiveMonth === month ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-950 border-zinc-900 text-zinc-500'}`}>
+                        {month}
                       </button>
-                    </div>
-
-                    {isExpanded && (
-                      <div className={`p-4 border-t border-zinc-800 ${status.bg}`}>
-                        <div className="flex items-center gap-2 mb-4">
-                          <Activity className={`w-5 h-5 ${status.color}`} />
-                          <span className={`font-black uppercase tracking-widest ${status.color}`}>{status.label}</span>
-                          <span className="ml-auto text-xs font-bold text-zinc-400">{Math.round((agent.actual / agent.target) * 100) || 0}% to Target</span>
-                        </div>
-                        
-                        <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800 mb-4">
-                          <p className="text-[11px] font-bold text-zinc-400 uppercase flex items-center gap-1 mb-2"><Lightbulb className="w-3 h-3 text-yellow-500" /> Automated Strategy</p>
-                          <p className="text-sm text-zinc-300 italic">"{generateCoachingSuggestion(agent)}"</p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-zinc-400 uppercase flex items-center gap-1"><MessageSquare className="w-3 h-3"/> Manager Direct Coaching Notes</label>
-                          <textarea 
-                            value={agent.feedback} 
-                            onChange={e => updateAgent(agent.id, 'feedback', e.target.value)} 
-                            placeholder="Type specific floor instructions for this agent here..."
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-sm text-zinc-300 focus:outline-none focus:border-zinc-500 h-24 resize-none"
-                          />
-                        </div>
-                      </div>
-                    )}
+                    ))}
                   </div>
-                )
-              })
-            )}
-          </div>
+
+                  {archiveMonth && mgmtArchive[archiveMonth] && (
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+                      <div className="flex overflow-x-auto scrollbar-hide border-b border-zinc-800 mb-4 pb-2">
+                        {departments.map(d => (
+                          <button key={d} onClick={() => setMgmtDept(d)} className={`px-4 py-2 text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all rounded-lg ${mgmtDept === d ? 'bg-blue-900/30 text-blue-400' : 'text-zinc-500'}`}>{d}</button>
+                        ))}
+                      </div>
+
+                      <div className="space-y-3">
+                        {mgmtArchive[archiveMonth][mgmtDept]?.length === 0 ? (
+                          <p className="text-zinc-600 text-xs italic">No historical records for {mgmtDept} in {archiveMonth}.</p>
+                        ) : (
+                          mgmtArchive[archiveMonth][mgmtDept]?.map((record, i) => (
+                            <div key={i} className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div>
+                                <h4 className="font-bold text-white uppercase">{record.name}</h4>
+                                <span className="text-[10px] text-zinc-500 font-mono">{record.dateLogged}</span>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div><span className="block text-[10px] text-zinc-500 uppercase">Turnover</span><span className="font-bold text-yellow-500">R{record.actual}</span><span className="text-zinc-600 text-[10px] block">/ R{record.target}</span></div>
+                                <div><span className="block text-[10px] text-zinc-500 uppercase">Units</span><span className="font-bold text-blue-400">{record.unitsActual}</span><span className="text-zinc-600 text-[10px] block">/ {record.unitsTarget}</span></div>
+                                <div><span className="block text-[10px] text-zinc-500 uppercase">Crep</span><span className="font-bold text-emerald-400">{record.crepActual}</span><span className="text-zinc-600 text-[10px] block">/ {record.crepTarget}</span></div>
+                                <div><span className="block text-[10px] text-zinc-500 uppercase">2-For-650</span><span className="font-bold text-purple-400">{record.twoForActual}</span><span className="text-zinc-600 text-[10px] block">/ {record.twoForTarget}</span></div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </main>
       </div>
     );
