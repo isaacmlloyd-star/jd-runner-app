@@ -2,13 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>JD Runner OS</title>
-    <!-- Tailwind CSS Script -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#facc15" />
+    <link rel="apple-touch-icon" href="/icon.png" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* This ensures the printed/downloaded PDF looks clean */
+      @media print {
+        body { background: white !important; color: black !important; }
+        .no-print { display: none !important; }
+        .print-only { display: block !important; }
+        .bg-zinc-900 { background: #f4f4f5 !important; border: 1px solid #d4d4d8 !important; }
+        .text-zinc-300 { color: #3f3f46 !important; }
+      }
+    </style>
   </head>
-  <body>
+  <body class="bg-zinc-950 text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js');
+      }
+    </script>
   </body>
 </html>
